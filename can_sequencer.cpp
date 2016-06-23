@@ -1,6 +1,7 @@
 #include "can_sequencer.h"
 #include <QDebug>
 #include <QFile>
+#include <QStandardItemModel>
 
 #define TX_CAN_ID_C300 0x700
 #define RX_CAN_ID_C300 0x701
@@ -19,9 +20,13 @@ can_sequencer::can_sequencer(QObject *parent) : QThread(parent)
     is_repeatable = false;
 }
 
-void can_sequencer::setTableWidget(QTableWidget * TableWidget)
+void can_sequencer::tableView(QTableView * TableView)
 {
-    XTableWidget = TableWidget;
+    XTableView = TableView;
+}
+void can_sequencer::set_model(QStandardItemModel * model)
+{
+    Xmodel = model;
 }
 
 can_sequencer::~can_sequencer()
@@ -66,104 +71,219 @@ void can_sequencer::run(void)
     QTableWidgetItem *tabItemName;
     bool one_shot = true;
 
-    file->resize(0);
+    qDebug() << Xmodel->rowCount();
+//    file->resize(0);
     while((is_repeatable) || (one_shot))
     {
-        for(i=0;i<XTableWidget->rowCount();i+=2)
+        for(i=0;i< Xmodel->rowCount();i+=2)
         {
-            tabWidItem  = XTableWidget->item(i,3);
-            tabItemName = XTableWidget->item(i,1);
-            if(tabWidItem != NULL)
+            if(QString::compare(Xmodel->item(i,1)->text(),"sleep")==0)
             {
-                if(tabItemName->checkState() == Qt::Checked)
+                qDebug() << "directive" << Xmodel->item(i,1)->text();
+//                sleepTime = (ulong) Xmodel->item(i,2)->text().toULong();
+//                Xmodel->item(i,3)->setText(QString("%1").arg(sleepTime));
+//                while(sleepTime > 0)
+//                {
+//                    QThread::sleep(1);
+//                    sleepTime--;
+
+//                    Xmodel->item(i,3)->setText(QString("%1").arg(sleepTime));
+////                    XTableView->viewport()->update();
+//                }
+            }
+            else if(QString::compare(Xmodel->item(i,1)->text(),"reboot")==0)
+            {
+                 qDebug() << "directive" << Xmodel->item(i,1)->text();
+            }
+            else
+            {
+
+                if(Xmodel->item(i,3)==0)
                 {
-                    XTableWidget->setItem(i,0, new QTableWidgetItem(QTime::currentTime().toString()));
-                    //                XTableWidget->item(i,2)->setBackgroundColor(QColor(0xdfffaf));
-                    if(QString::compare(tabItemName->text(),"sleep")==0)
-                    {
-                        sleepTime = (ulong) tabWidItem->text().toULong();
-                        XTableWidget->setItem(i,4, new QTableWidgetItem(QString("%1").arg(sleepTime)));
-                        while(sleepTime > 0)
-                        {
-                           QThread::sleep(1);
-                           sleepTime--;
+                    qDebug() << "comment" << Xmodel->item(i,3);
+                }
+                else
+                {
 
-                           XTableWidget->item(i,4)->setText(QString("%1").arg(sleepTime));
-                           XTableWidget->viewport()->update();
-                        }
-                    }
-                    else
-                    {
-                        frameLength = tabWidItem->text().simplified().length()/2;
-                        frame = convertStr2Hex(tabWidItem->text().simplified());
-                        XTableWidget->item(i,2)->setText(QString("%1").arg(frameLength));
+                    qDebug() << "frame" << Xmodel->item(i,3)->text();
 
-                        *stream <<"<<<,["<< frameLength <<"]," << tabWidItem->text().simplified() << endl;
-                        CanIsoTp.send_canIsoTp_frame((TU8*)frame, (TU32)frameLength);
-                        receiving_again = false;
-                        while(receiving_again == false)
+                    QString req_name        = Xmodel->item(i,1)->text();
+                    //QString req_len         = Xmodel->item(i,2)->text();
+                    QString req_frame       = Xmodel->item(i,3)->text();
+
+
+                    frameLength = req_frame.simplified().length()/2;
+                    frame = convertStr2Hex(req_frame.simplified());
+
+                    Xmodel->setData(Xmodel->index(i,2),frameLength,Qt::DisplayRole);
+
+                    *stream <<"<<<,["<< frameLength <<"]," << tabWidItem->text().simplified() << endl;
+                    CanIsoTp.send_canIsoTp_frame((TU8*)frame, (TU32)frameLength);
+                    receiving_again = false;
+                    while(receiving_again == false)
+                    {
+                        length = 0;
+                        memset(buffer,   0, 4095);
+                        memset(response, 0, 4095);
+                        if(CanIsoTp.recieve_canIsoTp_frame(buffer, (TU32 *)&length, 1000) > 0)
                         {
-                            length = 0;
-                            memset(buffer,   0, 4095);
-                            memset(response, 0, 4095);
-                            if(CanIsoTp.recieve_canIsoTp_frame(buffer, (TU32 *)&length, 1000) > 0)
+                            for(j=0;j<length;j++)
                             {
-                                for(j=0;j<length;j++)
-                                {
-                                    sprintf(response+(j*2), "%02X", buffer[j]);
-                                }
-                                fprintf(stdout,"%s \n",response);
-                                *stream <<">>>,["<< length <<"]," << response << endl;
+                                sprintf(response+(j*2), "%02X", buffer[j]);
+                            }
+                            fprintf(stdout,"%s \n",response);
+                            *stream <<">>>,["<< length <<"]," << response << endl;
 
-                                XTableWidget->showRow(i+1);
+                            //                        XTableView->showRow(i+1);
 
-                                QTableWidgetItem *tabWidItemValue;
-                                tabWidItemValue = new QTableWidgetItem();
-                                tabWidItemValue->setText(QString(response));
-                                tabWidItemValue->setFont(QFont("mono"));
-                                XTableWidget->setItem(i+1,3,tabWidItemValue);
+//                            QTableWidgetItem *tabWidItemValue;
+//                            tabWidItemValue = new QTableWidgetItem();
+//                            tabWidItemValue->setText(QString(response));
+//                            tabWidItemValue->setFont(QFont("mono"));
+//                            XTableView->setItem(i+1,3,tabWidItemValue);
 
-                                if(buffer[0]!=0x7F)
-                                {
-                                    XTableWidget->item(i+1,3)->setBackgroundColor(QColor(0x99,0xFF,0x99));
-                                    XTableWidget->setItem(i+1,4, new QTableWidgetItem("OK"));
-                                    process_result(buffer, description);
-                                    XTableWidget->setItem(i+1,5, new QTableWidgetItem(description));
-                                    receiving_again=true;
-                                }
-                                else
-                                {   if(buffer[2]!=0x78){
-                                        receiving_again=true;
-                                    }
-                                    if(buffer[2]==0x31){
-                                        XTableWidget->setItem(i+1,4, new QTableWidgetItem("OutOfRange"));
-                                        XTableWidget->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
-                                    }else if(buffer[2]==0x22){
-                                        XTableWidget->setItem(i+1,4, new QTableWidgetItem("CondNotCorrect"));
-                                        XTableWidget->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
-                                    }else if(buffer[2]==0x13){
-                                        XTableWidget->setItem(i+1,4, new QTableWidgetItem("BadFormat"));
-                                        XTableWidget->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
-                                    }else if(buffer[2]==0x78){
-                                        XTableWidget->setItem(i+1,4, new QTableWidgetItem("Waiting..."));
-                                        XTableWidget->item(i+1,3)->setBackgroundColor(QColor("orange"));
-                                    }
-                                }
-                                XTableWidget->setItem(i+1,2, new QTableWidgetItem(QString("%1").arg(length)));
-                                XTableWidget->setItem(i+1,0, new QTableWidgetItem(QTime::currentTime().toString()));
-                                XTableWidget->scrollToItem(XTableWidget->item(i+1,0), QAbstractItemView::EnsureVisible);
-                                /* Refrech table */
-                                XTableWidget->viewport()->update();
+                            if(buffer[0]!=0x7F)
+                            {
+//                                XTableView->item(i+1,3)->setBackgroundColor(QColor(0x99,0xFF,0x99));
+//                                Xmodel->setData(Xmodel->index(i+1,3),"",Qt::DisplayRole);
+
+//                                Xmodel->setData(Xmodel->index(i+1,4),"OK",Qt::DisplayRole);
+
+//                                process_result(buffer, description);
+//                                Xmodel->setData(Xmodel->index(i+1,5),"description",Qt::DisplayRole);
+
+                                receiving_again=true;
                             }
                             else
-                            {
+                            {   if(buffer[2]!=0x78){
+                                    receiving_again=true;
+                                }
+//                                if(buffer[2]==0x31){
+//                                    XTableView->setItem(i+1,4, new QTableWidgetItem("OutOfRange"));
+//                                    XTableView->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
+//                                }else if(buffer[2]==0x22){
+//                                    XTableView->setItem(i+1,4, new QTableWidgetItem("CondNotCorrect"));
+//                                    XTableView->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
+//                                }else if(buffer[2]==0x13){
+//                                    XTableView->setItem(i+1,4, new QTableWidgetItem("BadFormat"));
+//                                    XTableView->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
+//                                }else if(buffer[2]==0x78){
+//                                    XTableView->setItem(i+1,4, new QTableWidgetItem("Waiting..."));
+//                                    XTableView->item(i+1,3)->setBackgroundColor(QColor("orange"));
+//                                }
                             }
+//                            XTableView->setItem(i+1,2, new QTableWidgetItem(QString("%1").arg(length)));
+//                            XTableView->setItem(i+1,0, new QTableWidgetItem(QTime::currentTime().toString()));
+//                            XTableView->scrollToItem(XTableView->item(i+1,0), QAbstractItemView::EnsureVisible);
+
+                            /* Refrech table */
+//                            XTableView->viewport()->update();
                         }
-                        fprintf(stdout,"\n");
-                        free(frame);
+                        else
+                        {
+                        }
                     }
+                    fprintf(stdout,"\n");
+                    free(frame);
                 }
+
             }
+
+
+
+
+////            tabItemName = XTableView->item(i,1);
+//            if(tabWidItem != NULL)
+//            {
+//                if(tabItemName->checkState() == Qt::Checked)
+//                {
+//                    XTableView->setItem(i,0, new QTableWidgetItem(QTime::currentTime().toString()));
+//                    //                XTableView->item(i,2)->setBackgroundColor(QColor(0xdfffaf));
+//                    if(QString::compare(tabItemName->text(),"sleep")==0)
+//                    {
+//                        sleepTime = (ulong) tabWidItem->text().toULong();
+//                        XTableView->setItem(i,4, new QTableWidgetItem(QString("%1").arg(sleepTime)));
+//                        while(sleepTime > 0)
+//                        {
+//                           QThread::sleep(1);
+//                           sleepTime--;
+
+//                           XTableView->item(i,4)->setText(QString("%1").arg(sleepTime));
+//                           XTableView->viewport()->update();
+//                        }
+//                    }
+//                    else
+//                    {
+//                        frameLength = tabWidItem->text().simplified().length()/2;
+//                        frame = convertStr2Hex(tabWidItem->text().simplified());
+//                        XTableView->item(i,2)->setText(QString("%1").arg(frameLength));
+
+//                        *stream <<"<<<,["<< frameLength <<"]," << tabWidItem->text().simplified() << endl;
+//                        CanIsoTp.send_canIsoTp_frame((TU8*)frame, (TU32)frameLength);
+//                        receiving_again = false;
+//                        while(receiving_again == false)
+//                        {
+//                            length = 0;
+//                            memset(buffer,   0, 4095);
+//                            memset(response, 0, 4095);
+//                            if(CanIsoTp.recieve_canIsoTp_frame(buffer, (TU32 *)&length, 1000) > 0)
+//                            {
+//                                for(j=0;j<length;j++)
+//                                {
+//                                    sprintf(response+(j*2), "%02X", buffer[j]);
+//                                }
+//                                fprintf(stdout,"%s \n",response);
+//                                *stream <<">>>,["<< length <<"]," << response << endl;
+
+//                                XTableView->showRow(i+1);
+
+//                                QTableWidgetItem *tabWidItemValue;
+//                                tabWidItemValue = new QTableWidgetItem();
+//                                tabWidItemValue->setText(QString(response));
+//                                tabWidItemValue->setFont(QFont("mono"));
+//                                XTableView->setItem(i+1,3,tabWidItemValue);
+
+//                                if(buffer[0]!=0x7F)
+//                                {
+//                                    XTableView->item(i+1,3)->setBackgroundColor(QColor(0x99,0xFF,0x99));
+//                                    XTableView->setItem(i+1,4, new QTableWidgetItem("OK"));
+//                                    process_result(buffer, description);
+//                                    XTableView->setItem(i+1,5, new QTableWidgetItem(description));
+//                                    receiving_again=true;
+//                                }
+//                                else
+//                                {   if(buffer[2]!=0x78){
+//                                        receiving_again=true;
+//                                    }
+//                                    if(buffer[2]==0x31){
+//                                        XTableView->setItem(i+1,4, new QTableWidgetItem("OutOfRange"));
+//                                        XTableView->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
+//                                    }else if(buffer[2]==0x22){
+//                                        XTableView->setItem(i+1,4, new QTableWidgetItem("CondNotCorrect"));
+//                                        XTableView->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
+//                                    }else if(buffer[2]==0x13){
+//                                        XTableView->setItem(i+1,4, new QTableWidgetItem("BadFormat"));
+//                                        XTableView->item(i+1,3)->setBackgroundColor(QColor(0xFF,0x99,0x99));
+//                                    }else if(buffer[2]==0x78){
+//                                        XTableView->setItem(i+1,4, new QTableWidgetItem("Waiting..."));
+//                                        XTableView->item(i+1,3)->setBackgroundColor(QColor("orange"));
+//                                    }
+//                                }
+//                                XTableView->setItem(i+1,2, new QTableWidgetItem(QString("%1").arg(length)));
+//                                XTableView->setItem(i+1,0, new QTableWidgetItem(QTime::currentTime().toString()));
+//                                XTableView->scrollToItem(XTableView->item(i+1,0), QAbstractItemView::EnsureVisible);
+//                                /* Refrech table */
+//                                XTableView->viewport()->update();
+//                            }
+//                            else
+//                            {
+//                            }
+//                        }
+//                        fprintf(stdout,"\n");
+//                        free(frame);
+//                    }
+//                }
+//            }
         }
         CanIsoTp.reset();
         one_shot = false;

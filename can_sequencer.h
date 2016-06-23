@@ -6,6 +6,7 @@
 #include <QTableWidget>
 #include <QTime>
 #include <QFile>
+#include <QStandardItemModel>
 
 /*
 *  Parameters Data identifiers (PARAM DID)
@@ -95,7 +96,8 @@ class can_sequencer : public QThread
     Q_OBJECT
 public:
     explicit can_sequencer(QObject *parent = 0);
-    void setTableWidget(QTableWidget * TableWidget);
+    void tableView(QTableView *TableView);
+    void set_model(QStandardItemModel * model);
     char * process_result(TU8 *buffer, char *response);
     bool setRepeatable(bool repeat);
     void run(void);
@@ -111,7 +113,8 @@ private:
 private:
     bool is_repeatable;
     canIsoTp CanIsoTp;
-    QTableWidget * XTableWidget;
+    QTableView * XTableView;
+    QStandardItemModel * Xmodel;
 
     QString logfilename;
     QFile *file;

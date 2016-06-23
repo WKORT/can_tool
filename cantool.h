@@ -5,6 +5,7 @@
 #include <QMainWindow>
 #include <QLabel>
 #include <QProgressBar>
+#include <QStandardItemModel>
 
 namespace Ui {
 class cantool;
@@ -22,15 +23,11 @@ private:
 
 private slots:
     void on_pushButton_clicked();
-
     void on_pushButton_reloadcvs_clicked();
-
     void on_actionOpen_File_triggered();
-
     void on_checkBox_boucle_stateChanged(int arg1);
     void on_sequence_end(void);
     void on_sequencer_exit(void);
-
     void on_actionOpen_triggered();
 
 private:
@@ -39,6 +36,7 @@ private:
     QString cvsFileName;
     QLabel *statusLabel;
     QProgressBar *statusProgressBar;
+    QStandardItemModel* model;
 };
 
 #endif // CANTOOL_H
